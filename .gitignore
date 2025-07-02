@@ -1,0 +1,13 @@
+.metadata/*
+Debug/
+Release/
+*.launch
+.settings
+/.metadata/
+*.ninja_log
+WE_Adrastea_cellular_connectivity/libs/
+*.mtbqueryapi
+WE_Adrastea_cellular_connectivity/build/
+*.ninja_lock
+/mtb_shared
+project-creator.log
