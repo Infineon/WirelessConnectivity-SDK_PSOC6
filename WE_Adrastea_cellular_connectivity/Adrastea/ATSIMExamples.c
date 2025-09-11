@@ -50,7 +50,7 @@ void ATSIMExample()
 
     bool ret = AdrasteaI_ATPacketDomain_SetNetworkRegistrationResultCode(AdrasteaI_ATPacketDomain_Network_Registration_Result_Code_Enable_with_Location_Info);
     AdrasteaI_ExamplesPrint("Set Network Registration Result Code", ret);
-    while (status.state != AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming)
+    while (!((status.state == AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Home_Network) || (status.state == AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming)))
     {
         WE_Delay(10);
     }

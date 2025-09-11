@@ -75,10 +75,29 @@ void ATMQTTExample()
 
     AdrasteaI_ExamplesPrint("Set Network Registration Result Code", ret);
 
-    while (status.state != AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming)
+    while (!((status.state == AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming)||(status.state == AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Home_Network)))
     {
-        WE_Delay(10);
+        switch(status.state){
+			case AdrasteaI_ATPacketDomain_Network_Registration_State_Invalid: WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Invalid\r\n");break;
+			case AdrasteaI_ATPacketDomain_Network_Registration_State_Not_Registered_Not_Searching:WE_DEBUG_PRINT("Networkstatus: Registration_State_Not_Registered_Not_Searching\r\n");break;
+    	   	case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Home_Network:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_Home_Network\r\n");break;
+       		case AdrasteaI_ATPacketDomain_Network_Registration_State_Not_Registered_Searching:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Not_Registered_Searching\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registration_Denied:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registration_Denied\r\n");break;
+     		case AdrasteaI_ATPacketDomain_Network_Registration_State_Unknown: WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Unknown\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_Roaming\r\n");break;
+     		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_SMS_Only_Home_Network: WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_SMS_Only_Home_Network\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_SMS_Only_Roaming: WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_SMS_Only_Roaming\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Attached_For_Emergency_Bearer_Services_Only:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Attached_For_Emergency_Bearer_Services_Only\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_For_CSFB_Not_Preferred_Home_Network:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_For_CSFB_Not_Preferred_Home_Network\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_For_CSFB_Not_Preferred_Roaming:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_For_CSFB_Not_Preferred_Roaming\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_NumberOfValues: WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_NumberOfValues\r\n");break;
+      		default:WE_DEBUG_PRINT("Networkstatus: unknown state\r\n");break;
+		}
+		
+        
+        WE_Delay(500);   
     }
+    WE_DEBUG_PRINT("Networkstatus: Registered\r\n");
     
     /*Read the IMEI number, this will be used as the client ID*/
     AdrasteaI_ATDevice_IMEI_t imei;
@@ -90,7 +109,7 @@ void ATMQTTExample()
     ret = AdrasteaI_ATMQTT_SetMQTTUnsolicitedNotificationEvents(AdrasteaI_ATMQTT_Event_All, 1);
     AdrasteaI_ExamplesPrint("MQTT Unsolicited Notification Events", ret);
 	
-	AdrasteaI_ATMQTT_Client_ID_t clientID;
+	AdrasteaI_ATMQTT_Client_ID_t clientID="";
 	
 	strncpy(clientID, imei, 15);
 	/*Configure MQTT client*/
@@ -107,7 +126,15 @@ void ATMQTTExample()
 
     while (conResult.resultCode != AdrasteaI_ATMQTT_Event_Result_Code_Success)
     {
-        WE_Delay(10);
+		
+		switch(status.state){
+		        case AdrasteaI_ATMQTT_Event_Result_Code_Invalid: WE_DEBUG_PRINT("ATMQTT_Event_Result: AdrasteaI_ATMQTT_Event_Result_Code_Invalid\r\n");break;
+        		case AdrasteaI_ATMQTT_Event_Result_Code_Success: WE_DEBUG_PRINT("ATMQTT_Event_Result: AdrasteaI_ATMQTT_Event_Result_Code_Success\r\n");break;
+        		case AdrasteaI_ATMQTT_Event_Result_Code_Fail: WE_DEBUG_PRINT("ATMQTT_Event_Result: AdrasteaI_ATMQTT_Event_Result_Code_Fail\r\n");break;
+        		case AdrasteaI_ATMQTT_Event_Result_Code_NumberOfValues: WE_DEBUG_PRINT("ATMQTT_Event_Result: AdrasteaI_ATMQTT_Event_Result_Code_NumberOfValues\r\n");break;
+        		default: WE_DEBUG_PRINT("ATMQTT_Event_Result: unknown state\r\n");break;        		
+		}
+        WE_Delay(500);
     }
     
     
