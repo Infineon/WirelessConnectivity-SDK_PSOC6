@@ -68,8 +68,9 @@ void AdrasteaI_Examples()
     AdrasteaI_uart.uartTransmit = WE_UART1_Transmit;
 	
 	/*Select one example to run by uncommenting the same. All the other examples should remain commented */
-    ATDeviceExample();
+    //ATDeviceExample();
     //ATMQTTExample();
+    ATMQTTGNSSExample();
     //ATPowerExample();
     //ATNetServiceExample();
     //ATHTTPExample();

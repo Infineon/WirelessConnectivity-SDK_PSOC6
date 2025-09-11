@@ -38,6 +38,9 @@
 #include "ATDevice.h"
 #include "ATNetService.h"
 
+#include "ATGNSS.h"
+#include "ATPacketDomain.h"
+
 
 #include "xensiv_dps3xx_mtb.h"
 
@@ -174,7 +177,7 @@ void ATMQTTExample()
     while (conResult.resultCode != AdrasteaI_ATMQTT_Event_Result_Code_Success)
     {
 		
-		switch(status.state){
+		switch(conResult.resultCode){
 		        case AdrasteaI_ATMQTT_Event_Result_Code_Invalid: WE_DEBUG_PRINT("ATMQTT_Event_Result: AdrasteaI_ATMQTT_Event_Result_Code_Invalid\r\n");break;
         		case AdrasteaI_ATMQTT_Event_Result_Code_Success: WE_DEBUG_PRINT("ATMQTT_Event_Result: AdrasteaI_ATMQTT_Event_Result_Code_Success\r\n");break;
         		case AdrasteaI_ATMQTT_Event_Result_Code_Fail: WE_DEBUG_PRINT("ATMQTT_Event_Result: AdrasteaI_ATMQTT_Event_Result_Code_Fail\r\n");break;
@@ -261,6 +264,284 @@ void ATMQTTExample()
 
 
 }
+
+void ATMQTTGNSSExample()
+{
+    AdrasteaI_ATGNSS_Satellite_Count_t satelliteQueryCount = 0;
+    bool ret;
+
+    WE_DEBUG_PRINT("*** Start of Adrastea-I GNSS + MQTT example ***\r\n");
+
+    if (!AdrasteaI_Init(&AdrasteaI_uart, &AdrasteaI_pins, &AdrasteaI_ATMQTT_EventCallback)) {
+      WE_DEBUG_PRINT("Initialization error\r\n");
+      return;
+    }
+
+  
+
+     /* Initialize i2c for pressure sensor */
+    ret = cyhal_i2c_init(&i2c, DPS_I2C_SDA, DPS_I2C_SCL, NULL);
+    CY_ASSERT(ret == CY_RSLT_SUCCESS);
+    ret = cyhal_i2c_configure(&i2c, &i2c_cfg);
+    CY_ASSERT(ret == CY_RSLT_SUCCESS);
+
+    /* Initialize pressure sensor */
+    ret = xensiv_dps3xx_mtb_init_i2c(&pressure_sensor, &i2c, XENSIV_DPS3XX_I2C_ADDR_DEFAULT);
+    CY_ASSERT(ret == CY_RSLT_SUCCESS);
+
+
+
+    ret = AdrasteaI_ATPacketDomain_SetNetworkRegistrationResultCode(AdrasteaI_ATPacketDomain_Network_Registration_Result_Code_Enable_with_Location_Info);
+    AdrasteaI_ExamplesPrint("Set Network Registration Result Code", ret);
+
+    while (!((status.state == AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Home_Network) || (status.state == AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming)))
+    {
+        switch(status.state){
+			case AdrasteaI_ATPacketDomain_Network_Registration_State_Invalid: WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Invalid\r\n");break;
+			case AdrasteaI_ATPacketDomain_Network_Registration_State_Not_Registered_Not_Searching:WE_DEBUG_PRINT("Networkstatus: Registration_State_Not_Registered_Not_Searching\r\n");break;
+    	   	case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Home_Network:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_Home_Network\r\n");break;
+       		case AdrasteaI_ATPacketDomain_Network_Registration_State_Not_Registered_Searching:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Not_Registered_Searching\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registration_Denied:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registration_Denied\r\n");break;
+     		case AdrasteaI_ATPacketDomain_Network_Registration_State_Unknown: WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Unknown\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_Roaming\r\n");break;
+     		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_SMS_Only_Home_Network: WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_SMS_Only_Home_Network\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_SMS_Only_Roaming: WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_SMS_Only_Roaming\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Attached_For_Emergency_Bearer_Services_Only:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Attached_For_Emergency_Bearer_Services_Only\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_For_CSFB_Not_Preferred_Home_Network:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_For_CSFB_Not_Preferred_Home_Network\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_For_CSFB_Not_Preferred_Roaming:WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Registered_For_CSFB_Not_Preferred_Roaming\r\n");break;
+      		case AdrasteaI_ATPacketDomain_Network_Registration_State_NumberOfValues: WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_NumberOfValues\r\n");break;
+      		default:WE_DEBUG_PRINT("Networkstatus: unknown state\r\n");break;
+		}
+		
+        
+        WE_Delay(500);   
+    }
+    
+     // Read the IMEI number, this will be used as the client ID
+    AdrasteaI_ATDevice_IMEI_t imei;
+    ret = AdrasteaI_ATDevice_RequestIMEI(&imei);
+    AdrasteaI_ExamplesPrint("Request IMEI", ret);
+    WE_DEBUG_PRINT("IMEI: %s\r\n", imei);
+
+	// Enable all MQTT events
+    ret = AdrasteaI_ATMQTT_SetMQTTUnsolicitedNotificationEvents(AdrasteaI_ATMQTT_Event_All, 1);
+    AdrasteaI_ExamplesPrint("MQTT Unsolicited Notification Events", ret);
+	
+	AdrasteaI_ATMQTT_Client_ID_t clientID = "";
+	
+	strncpy(clientID, imei, 15);
+	// Configure MQTT client
+    ret = AdrasteaI_ATMQTT_ConfigureNodes(AdrasteaI_ATMQTT_Conn_ID_1,clientID, A1ServerAddress, userName, password);
+    AdrasteaI_ExamplesPrint("Configure Nodes", ret);
+
+    //Configure MQTT client
+    ret = AdrasteaI_ATMQTT_ConfigureProtocol(AdrasteaI_ATMQTT_Conn_ID_1, 1200, 1);
+    AdrasteaI_ExamplesPrint("Configure Protocol", ret);
+
+    //Connect to MQTT broker
+    ret = AdrasteaI_ATMQTT_Connect(AdrasteaI_ATMQTT_Conn_ID_1);
+    AdrasteaI_ExamplesPrint("Connect", ret);
+
+    while (conResult.resultCode != AdrasteaI_ATMQTT_Event_Result_Code_Success)
+    {
+		
+		switch(conResult.resultCode){
+		        case AdrasteaI_ATMQTT_Event_Result_Code_Invalid: WE_DEBUG_PRINT("ATMQTT_Event_Result: AdrasteaI_ATMQTT_Event_Result_Code_Invalid\r\n");break;
+        		case AdrasteaI_ATMQTT_Event_Result_Code_Success: WE_DEBUG_PRINT("ATMQTT_Event_Result: AdrasteaI_ATMQTT_Event_Result_Code_Success\r\n");break;
+        		case AdrasteaI_ATMQTT_Event_Result_Code_Fail: WE_DEBUG_PRINT("ATMQTT_Event_Result: AdrasteaI_ATMQTT_Event_Result_Code_Fail\r\n");break;
+        		case AdrasteaI_ATMQTT_Event_Result_Code_NumberOfValues: WE_DEBUG_PRINT("ATMQTT_Event_Result: AdrasteaI_ATMQTT_Event_Result_Code_NumberOfValues\r\n");break;
+        		default: WE_DEBUG_PRINT("ATMQTT_Event_Result: unknown state\r\n");break;        		
+		}
+        WE_Delay(500);
+    }
+    
+    //Create the device manually
+    memset(payload, 0, sizeof(payload));
+		
+	sprintf(payload, "100,%s,%s", imei, DEVICE_TYPE);
+	
+    ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+	AdrasteaI_ExamplesPrint("Device registration", ret);
+	if(ret == false)
+	{
+		return;
+	}
+    
+    //Subscribe to predefined topics
+    ret = AdrasteaI_ATMQTT_Subscribe(AdrasteaI_ATMQTT_Conn_ID_1, AdrasteaI_ATMQTT_QoS_At_Most_Once, topicOperations);
+    AdrasteaI_ExamplesPrint("Subscribe", ret);
+    
+    ret = AdrasteaI_ATMQTT_Subscribe(AdrasteaI_ATMQTT_Conn_ID_1, AdrasteaI_ATMQTT_QoS_At_Most_Once, topicError);
+    AdrasteaI_ExamplesPrint("Subscribe", ret);
+    
+        AdrasteaI_ATNetService_Signal_Quality_t sq;
+		AdrasteaI_ATNetService_ReadSignalQuality(&sq);
+		AdrasteaI_ExamplesPrint("Read Signal Quality", ret);
+		if (ret)
+		{
+		    WE_DEBUG_PRINT("RSSI: %d, BER: %d\r\n", sq.rssi, sq.ber);
+		}
+		
+		memset(payload, 0, sizeof(payload));
+		
+		sprintf(payload, "210,%i,%d", AdrasteaI_getRSSIindBm(sq.rssi),sq.ber);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+	
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+    
+    
+	// LTE Usage for GNSS
+	ret = AdrasteaI_ATGNSS_DownloadCEPFile(AdrasteaI_ATGNSS_CEP_Number_of_Days_1Day);
+    AdrasteaI_ExamplesPrint("Download CEP File", ret);
+
+    AdrasteaI_ATGNSS_CEP_Status_t cepStatus;
+    ret = AdrasteaI_ATGNSS_QueryCEPFileStatus(&cepStatus);
+    AdrasteaI_ExamplesPrint("Query CEP Status", ret);
+    if (ret)
+    {
+        WE_DEBUG_PRINT("Validity: %d, Remaining Days: %d, Hours: %d, Minutes:%d\r\n", cepStatus.validity, cepStatus.remDays, cepStatus.remHours, cepStatus.remMinutes);
+    }
+	
+
+ for(;;)
+    {	
+
+        // Disconnect the MQTT Connection
+        AdrasteaI_ATMQTT_Disconnect(AdrasteaI_ATMQTT_Conn_ID_1);
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        ret = AdrasteaI_ATDevice_SetPhoneFunctionality(AdrasteaI_ATDevice_Phone_Functionality_Min, AdrasteaI_ATDevice_Phone_Functionality_Reset_Do_Not_Reset);
+        AdrasteaI_ExamplesPrint("Set Phone Functionality", ret);
+
+        ret = AdrasteaI_ATGNSS_StartGNSS(AdrasteaI_ATGNSS_Start_Mode_Hot);
+        AdrasteaI_ExamplesPrint("Start GNSS", ret);
+
+        AdrasteaI_ATGNSS_Satellite_Systems_t satSystems = {.systems = {.GPS = AdrasteaI_ATGNSS_Runtime_Mode_State_Set, .GLONASS = AdrasteaI_ATGNSS_Runtime_Mode_State_Set}};
+        ret = AdrasteaI_ATGNSS_SetSatelliteSystems(satSystems);
+        AdrasteaI_ExamplesPrint("Set Satellite Systems", ret);
+
+        AdrasteaI_ATGNSS_Fix_t fix;
+        fix.fixType= AdrasteaI_ATGNSS_Fix_Type_Invalid;
+        
+        satelliteQueryCount = 0;
+
+        while (fix.fixType== AdrasteaI_ATGNSS_Fix_Type_No_Fix || fix.fixType== AdrasteaI_ATGNSS_Fix_Type_Invalid){
+
+            ret = AdrasteaI_ATGNSS_QueryGNSSSatellites(&satelliteQueryCount);
+            AdrasteaI_ExamplesPrint("Query GNSS Satellites", ret);
+            WE_DEBUG_PRINT("Satellites Count: %d\r\n", satelliteQueryCount);
+
+            ret = AdrasteaI_ATGNSS_QueryGNSSFix(AdrasteaI_ATGNSS_Fix_Relavancy_Current, &fix);
+            AdrasteaI_ExamplesPrint("Query GNSS Fix", ret);
+
+            if (ret && fix.fixType != AdrasteaI_ATGNSS_Fix_Type_No_Fix)
+            {
+                WE_DEBUG_PRINT("Fix Latitude: %f, Longitude: %f, Altitude: %.1f\r\n", fix.latitude, fix.longitude, fix.altitude);
+            }
+            else
+            {
+                WE_DEBUG_PRINT("No Fix. Satellites Count: %d\r\n", satelliteQueryCount);
+                WE_Delay(1000);
+            }
+        }
+
+        ret = AdrasteaI_ATDevice_SetPhoneFunctionality(AdrasteaI_ATDevice_Phone_Functionality_Full, AdrasteaI_ATDevice_Phone_Functionality_Reset_Do_Not_Reset);
+        AdrasteaI_ExamplesPrint("Set Phone Functionality", ret);
+        
+        // Stop GNSS
+        AdrasteaI_ATGNSS_StopGNSS();	
+        WE_Delay(2000); // GNSS Stop needs some delay before directly connecting to the MQTT 
+        
+        
+        
+	
+	
+	
+	
+	
+	
+	
+	
+        
+        //Connect to MQTT broker
+        ret = AdrasteaI_ATMQTT_Connect(AdrasteaI_ATMQTT_Conn_ID_1); 
+        AdrasteaI_ExamplesPrint("Connect", ret);
+
+        while (conResult.resultCode != AdrasteaI_ATMQTT_Event_Result_Code_Success)
+        {
+            WE_Delay(2000);
+        }    
+        
+   
+		memset(payload, 0, sizeof(payload));
+	
+		sprintf(payload, "401,%f,%f,%f,%f", fix.latitude, fix.longitude, fix.altitude, fix.accuracy);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);                                                                                                                                                                  
+		
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+         AdrasteaI_ATNetService_Signal_Quality_t sq;
+		AdrasteaI_ATNetService_ReadSignalQuality(&sq);
+		AdrasteaI_ExamplesPrint("Read Signal Quality", ret);
+		if (ret)
+		{
+		    WE_DEBUG_PRINT("RSSI: %d, BER: %d\r\n", sq.rssi, sq.ber);
+		}
+		
+		memset(payload, 0, sizeof(payload));
+		
+		sprintf(payload, "210,%i,%d", AdrasteaI_getRSSIindBm(sq.rssi),sq.ber);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+	
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+		
+		//Get  the pressure and temperature data and print the results to the UART
+       	float pressure, temperature;
+       	xensiv_dps3xx_read(&pressure_sensor, &pressure, &temperature);
+
+		AdrasteaI_ExamplesPrint("Read Pressure & Temperature", ret);
+		if (ret)
+		{
+		        	WE_DEBUG_PRINT("Pressure   : %d\r\n", (int)pressure); 
+   				WE_DEBUG_PRINT("Temperature: %d\r\n\r\n", (int)temperature);
+		}
+		
+		memset(payload, 0, sizeof(payload));
+		
+		sprintf(payload, "211,%d", (int)temperature);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);                                                                                                                                                                  
+		
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+		
+		memset(payload, 0, sizeof(payload));
+		
+		sprintf(payload, "200,Pressure,P,%d, pascal", (int) pressure);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+		
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+
+		while (subResult.resultCode != AdrasteaI_ATMQTT_Event_Result_Code_Success)
+		{
+		    WE_Delay(10);
+		}
+		WE_Delay(5000);
+	}
+}
+
+
 
 int8_t AdrasteaI_getRSSIindBm(uint8_t rssi)
 {
