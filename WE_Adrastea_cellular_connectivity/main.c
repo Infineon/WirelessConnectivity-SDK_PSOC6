@@ -31,8 +31,10 @@
 #endif
 #include "cybsp.h"
 #include "global.h"
-#include "debug.h"
+#include "cy_retarget_io.h"
 #include "AdrasteaI_Examples.h"
+
+
 
 
 /******************************************************************************
@@ -79,6 +81,14 @@ int main(void)
     /* Enable global interrupts */
     __enable_irq();
 	
+    /* Initialize retarget-io to use the debug UART port */
+    result = cy_retarget_io_init(CYBSP_DEBUG_UART_TX, CYBSP_DEBUG_UART_RX, CY_RETARGET_IO_BAUDRATE);
+    if (result != CY_RSLT_SUCCESS)
+    {
+        CY_ASSERT(0);
+    }
+
+
 	WE_Platform_Init();
 	
 	 /* Initialize the User LED */
@@ -93,7 +103,7 @@ int main(void)
     
     
     #if defined(WE_DEBUG) 
-    WE_Debug_Init();
+    //WE_Debug_Init();
     #endif
 
 	WE_Delay(5000);

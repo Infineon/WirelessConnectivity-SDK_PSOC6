@@ -36,7 +36,9 @@
 #include <stdio.h>
 
 #include "global_types.h"
-#include "debug.h"
+
+#define WE_DEBUG 1
+
 
 #ifdef __cplusplus
 extern "C"
