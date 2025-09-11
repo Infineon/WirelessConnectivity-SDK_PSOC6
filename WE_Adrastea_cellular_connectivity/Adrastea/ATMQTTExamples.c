@@ -24,8 +24,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <string.h>
+
+#include "cyhal.h"
+#include "cybsp.h"
  
+#include "ATSIM.h"
 #include "ATEvent.h"
 #include "ATMQTT.h"
 #include "ATPacketDomain.h"
@@ -35,6 +38,8 @@
 #include "ATDevice.h"
 #include "ATNetService.h"
 
+
+#include "xensiv_dps3xx_mtb.h"
 
 #define DEVICE_TYPE "ADRASTEA-I"
 #define TELEMETRY_SEND_INTERVAL_MS (30*1000)
@@ -46,8 +51,8 @@ AdrasteaI_ATMQTT_Topic_Name_t topicOperations = "s/ds";
 AdrasteaI_ATMQTT_Topic_Name_t topicError = "s/e";
 AdrasteaI_ATMQTT_Topic_Name_t pubTopic = "s/us";
 
-char payloadRSSI[32];
-char payloadCreateDev[128];
+
+char payload[128];
 
 void AdrasteaI_ATMQTT_EventCallback(char* eventText);
 int8_t AdrasteaI_getRSSIindBm(uint8_t rssi);
@@ -56,6 +61,20 @@ static AdrasteaI_ATPacketDomain_Network_Registration_Status_t status = {.state =
 static AdrasteaI_ATMQTT_Connection_Result_t conResult = {.resultCode = -1};
 static AdrasteaI_ATMQTT_Subscription_Result_t subResult = {.resultCode = -1};
 
+// Sensor and I2C definition
+xensiv_dps3xx_t pressure_sensor;
+cyhal_i2c_t i2c;
+cyhal_i2c_cfg_t i2c_cfg = {
+    .is_slave = false,
+    .address = 0,
+    .frequencyhal_hz = 100000
+};
+
+// PINs for SDA and SCL
+#define DPS_I2C_SDA (P0_3) 
+#define DPS_I2C_SCL (P0_2) 
+
+
 
 /**
  * @brief This example connects to the cellular network and accesses mosquitto.org via MQTT
@@ -63,6 +82,8 @@ static AdrasteaI_ATMQTT_Subscription_Result_t subResult = {.resultCode = -1};
  */
 void ATMQTTExample()
 {
+    bool ret;
+
     WE_DEBUG_PRINT("*** Start of Adrastea-I ATMQTT example ***\r\n");
 
     if (!AdrasteaI_Init(&AdrasteaI_uart, &AdrasteaI_pins, &AdrasteaI_ATMQTT_EventCallback))
@@ -70,8 +91,34 @@ void ATMQTTExample()
         WE_DEBUG_PRINT("Initialization error\r\n");
         return;
     }
+    
+     /* Initialize i2c for pressure sensor */
+    ret = cyhal_i2c_init(&i2c, DPS_I2C_SDA, DPS_I2C_SCL, NULL);
+    CY_ASSERT(ret == CY_RSLT_SUCCESS);
+    ret = cyhal_i2c_configure(&i2c, &i2c_cfg);
+    CY_ASSERT(ret == CY_RSLT_SUCCESS);
 
-    bool ret = AdrasteaI_ATPacketDomain_SetNetworkRegistrationResultCode(AdrasteaI_ATPacketDomain_Network_Registration_Result_Code_Enable_with_Location_Info);
+    /* Initialize pressure sensor */
+    ret = xensiv_dps3xx_mtb_init_i2c(&pressure_sensor, &i2c, XENSIV_DPS3XX_I2C_ADDR_DEFAULT);
+    CY_ASSERT(ret == CY_RSLT_SUCCESS);
+    
+
+
+
+    AdrasteaI_ATSIM_Lock_Status_t lockStatus;
+    ret = AdrasteaI_ATSIM_ReadFacilityLock(AdrasteaI_ATSIM_Facility_SC, &lockStatus);
+    AdrasteaI_ExamplesPrint("Read Facility Lock", ret);
+    if(ret)
+    {
+		WE_DEBUG_PRINT("Lockstatus: %i", lockStatus);
+		if(lockStatus == 1)
+		{
+			WE_DEBUG_PRINT("Error: SIM locked");
+			return;
+		}
+	}
+    
+    ret = AdrasteaI_ATPacketDomain_SetNetworkRegistrationResultCode(AdrasteaI_ATPacketDomain_Network_Registration_Result_Code_Enable_with_Location_Info);
 
     AdrasteaI_ExamplesPrint("Set Network Registration Result Code", ret);
 
@@ -139,11 +186,11 @@ void ATMQTTExample()
     
     
     /*Create the device manually*/
-    memset(payloadCreateDev, 0, sizeof(payloadCreateDev));
+    memset(payload, 0, sizeof(payload));
 		
-	sprintf(payloadCreateDev, "100,%s,%s", imei, DEVICE_TYPE);
+	sprintf(payload, "100,%s,%s", imei, DEVICE_TYPE);
 	
-    ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payloadCreateDev, strlen(payloadCreateDev));
+    ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
 	AdrasteaI_ExamplesPrint("Device registration", ret);
 	if(ret == false)
 	{
@@ -169,18 +216,45 @@ void ATMQTTExample()
 		    WE_DEBUG_PRINT("RSSI: %d, BER: %d\r\n", sq.rssi, sq.ber);
 		}
 		
-		memset(payloadRSSI, 0, sizeof(payloadRSSI));
+		memset(payload, 0, sizeof(payload));
 		
-		sprintf(payloadRSSI, "210,%i,%d", AdrasteaI_getRSSIindBm(sq.rssi),sq.ber);
-		WE_DEBUG_PRINT("Publish: %s\r\n", payloadRSSI);
+		sprintf(payload, "210,%i,%d", AdrasteaI_getRSSIindBm(sq.rssi),sq.ber);  // MQTT Format: https://cumulocity.com/docs/smartrest/mqtt-static-templates/#210
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
 	
-		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payloadRSSI, strlen(payloadRSSI));
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
 		AdrasteaI_ExamplesPrint("Publish", ret);
 		
+		//Get  the pressure and temperature data and print the results to the UART and MQTT
+    	float pressure, temperature;
+    	xensiv_dps3xx_read(&pressure_sensor, &pressure, &temperature);
+
+		AdrasteaI_ExamplesPrint("Read Pressure & Temperature", ret);
+		if (ret)
+		{
+		        	WE_DEBUG_PRINT("Pressure   : %f\r\n", pressure); 
+    				WE_DEBUG_PRINT("Temperature: %f\r\n\r\n", temperature);
+		}
+		
+		memset(payload, 0, sizeof(payload));
+		
+		sprintf(payload, "211,%f", temperature); // MQTT Format: https://cumulocity.com/docs/smartrest/mqtt-static-templates/#211
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);                                                                                                                                                                  
+		
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+		
+		memset(payload, 0, sizeof(payload));
+		
+		sprintf(payload, "200,Pressure,P,%f, pascal", pressure); // MQTT Format: https://cumulocity.com/docs/smartrest/mqtt-static-templates/#200
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+		
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
 		while (subResult.resultCode != AdrasteaI_ATMQTT_Event_Result_Code_Success)
 		{
 		    WE_Delay(10);
 		}
+        WE_DEBUG_PRINT("Wait for %d seconds\r\n", TELEMETRY_SEND_INTERVAL_MS/1000);
 		WE_Delay(TELEMETRY_SEND_INTERVAL_MS);
 
 	}
