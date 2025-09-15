@@ -798,12 +798,12 @@ bool AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_t connID, AdrasteaI_ATMQT
         return false;
     }
 
-    if (!ATCommand_AppendArgumentInt(pRequestCommand, retain, (ATCOMMAND_INTFLAGS_UNSIGNED | ATCOMMAND_INTFLAGS_NOTATION_DEC), ATCOMMAND_ARGUMENT_DELIM))
+    if (!ATCommand_AppendArgumentInt(pRequestCommand, qos, (ATCOMMAND_INTFLAGS_UNSIGNED | ATCOMMAND_INTFLAGS_NOTATION_DEC), ATCOMMAND_ARGUMENT_DELIM))
     {
         return false;
     }
 
-    if (!ATCommand_AppendArgumentInt(pRequestCommand, qos, (ATCOMMAND_INTFLAGS_UNSIGNED | ATCOMMAND_INTFLAGS_NOTATION_DEC), ATCOMMAND_ARGUMENT_DELIM))
+    if (!ATCommand_AppendArgumentInt(pRequestCommand, retain, (ATCOMMAND_INTFLAGS_UNSIGNED | ATCOMMAND_INTFLAGS_NOTATION_DEC), ATCOMMAND_ARGUMENT_DELIM))
     {
         return false;
     }
