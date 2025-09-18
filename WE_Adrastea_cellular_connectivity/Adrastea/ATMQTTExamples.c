@@ -43,13 +43,22 @@
 
 
 #include "xensiv_dps3xx_mtb.h"
+#include "mtb_bmi270.h"
+#include "mtb_bmm350.h"
+
+#include "mtb_ssd1306.h"
+#include "GUI.h"
+
+#include "pn532_cyhal.h"
 
 #define DEVICE_TYPE "ADRASTEA-I"
 #define TELEMETRY_SEND_INTERVAL_MS (30*1000)
 
 AdrasteaI_ATCommon_IP_Addr_t A1ServerAddress = "avl.iotstg.a1.digital";
-AdrasteaI_ATCommon_Auth_Username_t userName = "<Tenant ID>/<user_name>" ;
-AdrasteaI_ATCommon_Auth_Password_t password = "<password>";
+//AdrasteaI_ATCommon_Auth_Username_t userName = "<Tenant ID>/<user_name>" ;
+//AdrasteaI_ATCommon_Auth_Password_t password = "<password>";
+AdrasteaI_ATCommon_Auth_Username_t userName = "t99024930/Miniaturized-ADAS" ;
+AdrasteaI_ATCommon_Auth_Password_t password = "mqtt4MADAS2025!";
 AdrasteaI_ATMQTT_Topic_Name_t topicOperations = "s/ds";
 AdrasteaI_ATMQTT_Topic_Name_t topicError = "s/e";
 AdrasteaI_ATMQTT_Topic_Name_t pubTopic = "s/us";
@@ -66,18 +75,31 @@ static AdrasteaI_ATMQTT_Subscription_Result_t subResult = {.resultCode = -1};
 
 // Sensor and I2C definition
 xensiv_dps3xx_t pressure_sensor;
+mtb_bmi270_t imu;
+mtb_bmm350_t magnetometer;
+
+PN532 pn532;
+
 cyhal_i2c_t i2c;
 cyhal_i2c_cfg_t i2c_cfg = {
     .is_slave = false,
     .address = 0,
-    .frequencyhal_hz = 100000
+    .frequencyhal_hz = 400000
 };
 
 // PINs for SDA and SCL
-#define DPS_I2C_SDA (P0_3) 
-#define DPS_I2C_SCL (P0_2) 
+#define DPS_I2C_SDA (CYBSP_I2C_SDA) 
+#define DPS_I2C_SCL (CYBSP_I2C_SCL) 
+
+#define BMM_I2C_SDA (CYBSP_I2C_SDA)
+#define BMM_I2C_SCL (CYBSP_I2C_SCL)
+
+#define IMU_I2C_SDA (CYBSP_I2C_SDA)
+#define IMU_I2C_SCL (CYBSP_I2C_SCL)
 
 
+void bytes_to_hex_string(const uint8_t *data, size_t len, char *out_str);
+uint64_t bytes_to_uint64(const uint8_t *data, size_t len);
 
 /**
  * @brief This example connects to the cellular network and accesses mosquitto.org via MQTT
@@ -269,6 +291,8 @@ void ATMQTTGNSSExample()
 {
     AdrasteaI_ATGNSS_Satellite_Count_t satelliteQueryCount = 0;
     bool ret;
+    char progress='-';
+
 
     WE_DEBUG_PRINT("*** Start of Adrastea-I GNSS + MQTT example ***\r\n");
 
@@ -288,6 +312,72 @@ void ATMQTTGNSSExample()
     /* Initialize pressure sensor */
     ret = xensiv_dps3xx_mtb_init_i2c(&pressure_sensor, &i2c, XENSIV_DPS3XX_I2C_ADDR_DEFAULT);
     CY_ASSERT(ret == CY_RSLT_SUCCESS);
+
+    mtb_bmi270_data_t bmi270_data;
+   /* Initialize the sensor and configure default settings */
+    ret = mtb_bmi270_init_i2c(&imu, &i2c, MTB_BMI270_ADDRESS_DEFAULT);
+    if (CY_RSLT_SUCCESS != ret)
+    {
+        CY_ASSERT(0);
+    }
+    ret = mtb_bmi270_config_default(&imu);
+    if (CY_RSLT_SUCCESS != ret)
+    {
+        CY_ASSERT(0);
+    }
+
+    mtb_bmm350_data_t bmm350_data;
+      /* Initialize the sensor */
+    ret = mtb_bmm350_init_i2c(&magnetometer, &i2c, MTB_BMM350_ADDRESS_SEC);
+    if (CY_RSLT_SUCCESS != ret)
+    {
+        CY_ASSERT(0);
+    }
+
+
+     /* Initialize the OLED display */
+    ret = mtb_ssd1306_init_i2c(&i2c);
+    
+    CY_ASSERT(ret == CY_RSLT_SUCCESS);
+
+
+    GUI_Init();
+    GUI_DispString("GNSS + MQTT Demo\n");
+
+
+/* Initialize PN532 with I2C interface */
+    pn532_cyhal_i2c_t i2c_if_ctx = {
+        .i2c = &i2c,
+        .address = PN532_I2C_ADDRESS
+    };
+    PN532_I2C_Init(&pn532, &i2c_if_ctx);
+
+    uint8_t version[4];
+    if (PN532_GetFirmwareVersion(&pn532, version) == PN532_STATUS_OK) {
+        printf("Found PN532 with firmware version: %d.%d\r\n", version[1], version[2]);
+    } else {
+        printf("PN532 not found.\r\n");
+        while(1);
+    }
+
+    // Configure PN532 to communicate with MiFare cards
+    PN532_SamConfiguration(&pn532);
+
+
+
+    AdrasteaI_ATSIM_Lock_Status_t lockStatus;
+    ret = AdrasteaI_ATSIM_ReadFacilityLock(AdrasteaI_ATSIM_Facility_SC, &lockStatus);
+    AdrasteaI_ExamplesPrint("Read Facility Lock", ret);
+    if(ret)
+    {
+		WE_DEBUG_PRINT("Lockstatus: %i", lockStatus);
+		if(lockStatus == 1)
+		{
+			WE_DEBUG_PRINT("Error: SIM locked");
+			return;
+		}
+	}
+    
 
 
 
@@ -316,7 +406,9 @@ void ATMQTTGNSSExample()
         
         WE_Delay(500);   
     }
-    
+
+    GUI_DispString("LTE ");
+
      // Read the IMEI number, this will be used as the client ID
     AdrasteaI_ATDevice_IMEI_t imei;
     ret = AdrasteaI_ATDevice_RequestIMEI(&imei);
@@ -355,6 +447,8 @@ void ATMQTTGNSSExample()
         WE_Delay(500);
     }
     
+    GUI_DispString("MQTT\n");
+
     //Create the device manually
     memset(payload, 0, sizeof(payload));
 		
@@ -380,6 +474,8 @@ void ATMQTTGNSSExample()
 		if (ret)
 		{
 		    WE_DEBUG_PRINT("RSSI: %d, BER: %d\r\n", sq.rssi, sq.ber);
+            sprintf(payload, "RSSI: %i BER: %i\n", AdrasteaI_getRSSIindBm(sq.rssi),sq.ber);
+            GUI_DispStringAt(payload,0,2*8);
 		}
 		
 		memset(payload, 0, sizeof(payload));
@@ -390,8 +486,48 @@ void ATMQTTGNSSExample()
 		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
 		AdrasteaI_ExamplesPrint("Publish", ret);
     
-    
-	// LTE Usage for GNSS
+
+    uint8_t uid[MIFARE_UID_MAX_LENGTH];
+    int uid_len;
+    char uid_str[MIFARE_UID_MAX_LENGTH * 3];
+    uint64_t uid_num ;
+
+    printf("Waiting for a card...\r\n");
+
+    // Wait for a card to be present
+    uid_len = PN532_ReadPassiveTarget(&pn532, uid, PN532_MIFARE_ISO14443A, 1000);
+
+    if (uid_len > 0)
+    {
+        // Card found
+        bytes_to_hex_string(uid, uid_len, uid_str);
+        printf("Card found! UID: %s\r\n", uid_str);
+        
+        uid_num = bytes_to_uint64(uid, uid_len);
+        printf("Card found! UID (as number): %llu\r\n", (unsigned long long)uid_num);
+
+
+         memset(payload, 0, sizeof(payload));
+
+		sprintf(payload, "200,RFID,ID, %llu, id",  (unsigned long long)uid_num);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+		
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+    }
+    else if (uid_len == PN532_STATUS_ERROR)
+    {
+        printf("Error reading card.\r\n");
+    }
+    else
+    {
+        // No card found
+    }
+
+   
+
+    // LTE Usage for GNSS
 	ret = AdrasteaI_ATGNSS_DownloadCEPFile(AdrasteaI_ATGNSS_CEP_Number_of_Days_1Day);
     AdrasteaI_ExamplesPrint("Download CEP File", ret);
 
@@ -409,20 +545,13 @@ void ATMQTTGNSSExample()
 
         // Disconnect the MQTT Connection
         AdrasteaI_ATMQTT_Disconnect(AdrasteaI_ATMQTT_Conn_ID_1);
-        
-        
-        
-        
-        
-        
-        
-        
-        
+     
         ret = AdrasteaI_ATDevice_SetPhoneFunctionality(AdrasteaI_ATDevice_Phone_Functionality_Min, AdrasteaI_ATDevice_Phone_Functionality_Reset_Do_Not_Reset);
         AdrasteaI_ExamplesPrint("Set Phone Functionality", ret);
 
         ret = AdrasteaI_ATGNSS_StartGNSS(AdrasteaI_ATGNSS_Start_Mode_Hot);
         AdrasteaI_ExamplesPrint("Start GNSS", ret);
+        GUI_DispStringAt("GNSS        \n",0,1*8);
 
         AdrasteaI_ATGNSS_Satellite_Systems_t satSystems = {.systems = {.GPS = AdrasteaI_ATGNSS_Runtime_Mode_State_Set, .GLONASS = AdrasteaI_ATGNSS_Runtime_Mode_State_Set}};
         ret = AdrasteaI_ATGNSS_SetSatelliteSystems(satSystems);
@@ -433,7 +562,7 @@ void ATMQTTGNSSExample()
         
         satelliteQueryCount = 0;
 
-        while (fix.fixType== AdrasteaI_ATGNSS_Fix_Type_No_Fix || fix.fixType== AdrasteaI_ATGNSS_Fix_Type_Invalid){
+        while (fix.fixType== AdrasteaI_ATGNSS_Fix_Type_No_Fix || fix.fixType== AdrasteaI_ATGNSS_Fix_Type_Invalid||fix.accuracy>10 ){
 
             ret = AdrasteaI_ATGNSS_QueryGNSSSatellites(&satelliteQueryCount);
             AdrasteaI_ExamplesPrint("Query GNSS Satellites", ret);
@@ -444,12 +573,31 @@ void ATMQTTGNSSExample()
 
             if (ret && fix.fixType != AdrasteaI_ATGNSS_Fix_Type_No_Fix)
             {
-                WE_DEBUG_PRINT("Fix Latitude: %f, Longitude: %f, Altitude: %.1f\r\n", fix.latitude, fix.longitude, fix.altitude);
+                WE_DEBUG_PRINT("Fix Latitude: %f, Longitude: %f, Altitude: %.1f, Accuracy: %.1f\r\n", fix.latitude, fix.longitude, fix.altitude, fix.accuracy);
+                
+                sprintf(payload, "Fix:  %.1f   \n", fix.accuracy);
+                GUI_DispStringAt(payload,0,5*8);
+
+                sprintf(payload, "Time: %02d:%02d:%02d\n", fix.time.Hours,fix.time.Minutes,fix.time.Seconds);
+                GUI_DispStringAt(payload,0,6*8);
             }
             else
             {
                 WE_DEBUG_PRINT("No Fix. Satellites Count: %d\r\n", satelliteQueryCount);
-                WE_Delay(1000);
+                
+                sprintf(payload, "Sat Count: %d  %c\n", satelliteQueryCount,progress);
+                GUI_DispStringAt(payload,0,5*8);
+
+                if(progress=='-'){
+                    progress='+';
+                }else{
+                     progress='-';
+                }
+
+                sprintf(payload, "Time: %02d:%02d:%02d\n", fix.time.Hours,fix.time.Minutes,fix.time.Seconds);
+                GUI_DispStringAt(payload,0,6*8);
+                WE_Delay(1000); 
+
             }
         }
 
@@ -459,7 +607,7 @@ void ATMQTTGNSSExample()
         // Stop GNSS
         AdrasteaI_ATGNSS_StopGNSS();	
         WE_Delay(2000); // GNSS Stop needs some delay before directly connecting to the MQTT 
-        
+        GUI_DispStringAt("LTE MQTT\n",0,1*8);
         
         
 	
@@ -495,6 +643,9 @@ void ATMQTTGNSSExample()
 		if (ret)
 		{
 		    WE_DEBUG_PRINT("RSSI: %d, BER: %d\r\n", sq.rssi, sq.ber);
+            sprintf(payload, "RSSI: %i BER: %i\n", AdrasteaI_getRSSIindBm(sq.rssi),sq.ber);
+            GUI_DispString(payload);
+            GUI_DispStringAtCEOL(payload,0,2*8);
 		}
 		
 		memset(payload, 0, sizeof(payload));
@@ -512,7 +663,7 @@ void ATMQTTGNSSExample()
 		AdrasteaI_ExamplesPrint("Read Pressure & Temperature", ret);
 		if (ret)
 		{
-		        	WE_DEBUG_PRINT("Pressure   : %d\r\n", (int)pressure); 
+		        WE_DEBUG_PRINT("Pressure   : %d\r\n", (int)pressure); 
    				WE_DEBUG_PRINT("Temperature: %d\r\n\r\n", (int)temperature);
 		}
 		
@@ -532,6 +683,91 @@ void ATMQTTGNSSExample()
 		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
 		AdrasteaI_ExamplesPrint("Publish", ret);
 
+        memset(payload, 0, sizeof(payload));
+
+		sprintf(payload, "200,Satellites,count,%d, count", satelliteQueryCount);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+		
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+
+        memset(payload, 0, sizeof(payload));
+
+		sprintf(payload, "200,Accuracy,m,%f, m", fix.accuracy);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+		
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+        /* Get the accelerometer and gyroscope data and print the results to the UART */
+        ret = mtb_bmi270_read(&imu, &bmi270_data);
+        printf("\nAcc:  X:%6d Y:%6d Z:%6d\r\n", bmi270_data.sensor_data.acc.x, bmi270_data.sensor_data.acc.y,
+               bmi270_data.sensor_data.acc.z);
+        printf("Gyro: X:%6d Y:%6d Z:%6d\r\n", bmi270_data.sensor_data.gyr.x, bmi270_data.sensor_data.gyr.y,
+               bmi270_data.sensor_data.gyr.z);
+
+        memset(payload, 0, sizeof(payload));
+		sprintf(payload, "200,Gyroscope,X,%d, rad/s", bmi270_data.sensor_data.gyr.x);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+        memset(payload, 0, sizeof(payload));
+		sprintf(payload, "200,Gyroscope,Y,%d, rad/s", bmi270_data.sensor_data.gyr.y);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+		ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+        memset(payload, 0, sizeof(payload));
+		sprintf(payload, "200,Gyroscope,Z,%d, rad/s", bmi270_data.sensor_data.gyr.z);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+        ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+        memset(payload, 0, sizeof(payload));
+		sprintf(payload, "200,Accelerometer,X,%d, m/s^2", bmi270_data.sensor_data.acc.x);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+        ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+        memset(payload, 0, sizeof(payload));
+		sprintf(payload, "200,Accelerometer,Y,%d, m/s^2", bmi270_data.sensor_data.acc.y);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+        ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+        memset(payload, 0, sizeof(payload));
+		sprintf(payload, "200,Accelerometer,Z,%d, m/s^2", bmi270_data.sensor_data.acc.z);
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+        ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+
+             /* Get the magnetometer data and temperature, and print the results to the UART */
+        ret = mtb_bmm350_read(&magnetometer, &bmm350_data);
+        printf("\nMag: %f, %f, %f \r\n", bmm350_data.sensor_data.x, bmm350_data.sensor_data.y,
+               bmm350_data.sensor_data.z);
+        printf("Temp: %f\r\n\n", bmm350_data.sensor_data.temperature);
+
+
+        memset(payload, 0, sizeof(payload));
+		sprintf(payload, "200,Magnetometer,X,%d, uT", (int)(bmm350_data.sensor_data.x));
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+        ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+        memset(payload, 0, sizeof(payload));
+		sprintf(payload, "200,Magnetometer,Y,%d, uT", (int)(bmm350_data.sensor_data.y));
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+        ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
+
+        memset(payload, 0, sizeof(payload));
+		sprintf(payload, "200,Magnetometer,Z,%d, uT", (int)(bmm350_data.sensor_data.z));
+		WE_DEBUG_PRINT("Publish: %s\r\n", payload);
+        ret = AdrasteaI_ATMQTT_Publish(AdrasteaI_ATMQTT_Conn_ID_1, 0, 0, pubTopic, payload, strlen(payload));
+		AdrasteaI_ExamplesPrint("Publish", ret);
 
 		while (subResult.resultCode != AdrasteaI_ATMQTT_Event_Result_Code_Success)
 		{
@@ -612,4 +848,75 @@ void AdrasteaI_ATMQTT_EventCallback(char* eventText)
         default:
             break;
     }
+}
+
+
+
+/**
+ * @brief Converts a byte array to a hex string.
+ *
+ * @param data The byte array to convert.
+ * @param len The length of the byte array.
+ * @param out_str The output buffer to store the hex string.
+ *                The buffer must be large enough (at least len * 3).
+ */
+void bytes_to_hex_string(const uint8_t *data, size_t len, char *out_str)
+{
+    if (len == 0)
+    {
+        *out_str = '\0';
+        return;
+    }
+
+    for (size_t i = 0; i < len; i++)
+    {
+        // Each byte takes 2 hex chars + 1 space.
+        sprintf(out_str + (i * 3), "%02X ", data[i]);
+    }
+    // Remove the trailing space and add null terminator
+    out_str[len * 3 - 1] = '\0';
+}
+
+
+/**
+ * @brief Converts a byte array to a hex string without spaces.
+ *
+ * @param data The byte array to convert.
+ * @param len The length of the byte array.
+ * @param out_str The output buffer to store the hex string.
+ *                The buffer must be large enough (at least len * 2 + 1).
+ */
+void bytes_to_hex_string_no_space(const uint8_t *data, size_t len, char *out_str)
+{
+    if (len == 0)
+    {
+        *out_str = '\0';
+        return;
+    }
+
+    for (size_t i = 0; i < len; i++)
+    {
+        // Each byte takes 2 hex chars.
+        sprintf(out_str + (i * 2), "%02X", data[i]);
+    }
+}
+
+/**
+ * @brief Converts a byte array to a uint64_t integer.
+ * Assumes big-endian byte order in the array.
+ *
+ * @param data The byte array to convert.
+ * @param len The length of the byte array (max 8).
+ * @return The converted 64-bit unsigned integer. Returns 0 if len > 8 or data is NULL.
+ */
+uint64_t bytes_to_uint64(const uint8_t *data, size_t len)
+{
+    if (data == NULL || len == 0 || len > 8) {
+        return 0;
+    }
+    uint64_t result = 0;
+    for (size_t i = 0; i < len; i++) {
+        result = (result << 8) | data[i];
+    }
+    return result;
 }
