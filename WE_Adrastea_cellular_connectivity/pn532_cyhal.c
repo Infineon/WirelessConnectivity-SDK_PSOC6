@@ -27,6 +27,8 @@
  * THE SOFTWARE.
  **************************************************************************/
 
+#include <stdio.h>
+
 #include "cyhal_i2c.h"
 #include "cyhal_spi.h"
 #include "cyhal_gpio.h"

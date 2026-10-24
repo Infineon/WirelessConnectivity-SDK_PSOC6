@@ -1,0 +1,129 @@
+{
+    "version": "2.0.0",
+    "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+            "CY_TOOLS_PATHS": "${config:modustoolbox.toolsPath}",
+            "CY_COMPILER_GCC_ARM_DIR": "${config:cortex-debug.armToolchainPath}/.."
+        }
+    },
+    "tasks": [
+        {
+            "label": "Build",
+            "type": "process",
+            "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+            "args": [
+                "--norc", "-c",
+                "export PATH=/bin:/usr/bin:$PATH; unset GIT_EXEC_PATH; exec make build TOOLCHAIN=GCC_ARM CONFIG=Debug CY_COMPILER_GCC_ARM_DIR=\"$CY_COMPILER_GCC_ARM_DIR\""
+            ],
+            "problemMatcher": "$gcc",
+            "group": { "kind": "build", "isDefault": true }
+        },
+        {
+            "label": "Rebuild",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Clean", "Build"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean",
+            "type": "process",
+            "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+            "args": [
+                "--norc", "-c",
+                "export PATH=/bin:/usr/bin:$PATH; unset GIT_EXEC_PATH; exec make clean TOOLCHAIN=GCC_ARM CONFIG=Debug CY_COMPILER_GCC_ARM_DIR=\"$CY_COMPILER_GCC_ARM_DIR\""
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Build & Program",
+            "type": "process",
+            "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+            "args": [
+                "--norc", "-c",
+                "export PATH=/bin:/usr/bin:$PATH; unset GIT_EXEC_PATH; exec make program TOOLCHAIN=GCC_ARM CONFIG=Debug CY_COMPILER_GCC_ARM_DIR=\"$CY_COMPILER_GCC_ARM_DIR\""
+            ],
+            "problemMatcher": "$gcc",
+            "group": "build"
+        },
+        {
+            "label": "Quick Program",
+            "type": "process",
+            "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+            "args": [
+                "--norc", "-c",
+                "export PATH=/bin:/usr/bin:$PATH; unset GIT_EXEC_PATH; exec make qprogram TOOLCHAIN=GCC_ARM CONFIG=Debug CY_COMPILER_GCC_ARM_DIR=\"$CY_COMPILER_GCC_ARM_DIR\""
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Erase Device",
+            "type": "process",
+            "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+            "args": [
+                "--norc", "-c",
+                "export PATH=/bin:/usr/bin:$PATH; unset GIT_EXEC_PATH; exec make erase TOOLCHAIN=GCC_ARM CONFIG=Debug CY_COMPILER_GCC_ARM_DIR=\"$CY_COMPILER_GCC_ARM_DIR\""
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Erase All",
+            "type": "process",
+            "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+            "args": [
+                "--norc", "-c",
+                "export PATH=/bin:/usr/bin:$PATH; unset GIT_EXEC_PATH; exec make erase MTB_ERASE_EXT_MEM=1 TOOLCHAIN=GCC_ARM CONFIG=Debug CY_COMPILER_GCC_ARM_DIR=\"$CY_COMPILER_GCC_ARM_DIR\""
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Get Libraries",
+            "type": "process",
+            "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+            "args": [
+                "--norc", "-c",
+                "export PATH=/bin:/usr/bin:$PATH; unset GIT_EXEC_PATH; exec make getlibs CY_COMPILER_GCC_ARM_DIR=\"$CY_COMPILER_GCC_ARM_DIR\""
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Tool: Library Manager",
+            "type": "process",
+            "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+            "args": [
+                "--norc", "-c",
+                "export PATH=/bin:/usr/bin:$PATH; unset GIT_EXEC_PATH; exec make modlibs MTB__JOB_BACKGROUND= CY_COMPILER_GCC_ARM_DIR=\"$CY_COMPILER_GCC_ARM_DIR\""
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Build/Ninja",
+            "type": "process",
+            "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+            "args": [
+                "--norc", "-c",
+                "export PATH=/bin:/usr/bin:$PATH; unset GIT_EXEC_PATH; exec make build NINJA=1 TOOLCHAIN=GCC_ARM CONFIG=Debug CY_COMPILER_GCC_ARM_DIR=\"$CY_COMPILER_GCC_ARM_DIR\""
+            ],
+            "problemMatcher": "$gcc",
+            "group": "build"
+        },
+        {
+            "label": "Rebuild/Ninja",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Clean", "Build/Ninja"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build/Ninja & Program",
+            "type": "process",
+            "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+            "args": [
+                "--norc", "-c",
+                "export PATH=/bin:/usr/bin:$PATH; unset GIT_EXEC_PATH; exec make program NINJA=1 TOOLCHAIN=GCC_ARM CONFIG=Debug CY_COMPILER_GCC_ARM_DIR=\"$CY_COMPILER_GCC_ARM_DIR\""
+            ],
+            "problemMatcher": "$gcc"
+        }
+    ]
+}

@@ -1,0 +1,17 @@
+{
+    "folders": [
+        {
+            "path": "."
+        },
+        {
+            "path": "../mtb_shared"
+        }
+    ],
+    "extensions": {
+        "recommendations": [
+            "marus25.cortex-debug",
+            "llvm-vs-code-extensions.vscode-clangd",
+            "ms-vscode.cpptools"
+        ]
+    }
+}

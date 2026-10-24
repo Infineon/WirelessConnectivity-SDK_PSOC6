@@ -106,6 +106,20 @@ Follow the [ModusToolbox™ software installation guide](https://www.infineon.co
 
 ## Running the examples
 
+### Visual Studio Code on Windows
+
+The checked-in VS Code tasks use ModusToolbox tools 3.7 and GCC ARM 14.2.1 as the reference setup. Before opening `WE_Adrastea_cellular_connectivity\mtb-example-empty-app.code-workspace`, create the local settings file from the repository root:
+
+```powershell
+Copy-Item .\WE_Adrastea_cellular_connectivity\.vscode\settings.json.example .\WE_Adrastea_cellular_connectivity\.vscode\settings.json
+```
+
+Replace `YOUR_USER` and adjust the absolute tool paths for your installation. The local `settings.json` is ignored by Git; it is the single source for the build compiler, GDB and OpenOCD paths. Do not use `%APPDATA%` in these settings: the Bash tasks do not expand Windows environment-variable syntax.
+
+Create `credentials.h` as described below, then run **Get Libraries** and **Build** from **Terminal > Run Task**. **Build** is the only default build task and does not program the board. All executable tasks use the same tools directory and compiler. They clear an inherited `GIT_EXEC_PATH` so the ModusToolbox Git executable finds its own HTTPS transport.
+
+Install the recommended extensions. clangd uses `build\compile_commands.json`; C/C++ IntelliSense is disabled in the local settings to avoid duplicate diagnostics. If you prefer C/C++ IntelliSense, disable clangd and remove that setting. Missing headers and implicit function declarations are not suppressed. OpenOCD uses the scripts shipped with its configured installation. Debug launch requires a connected board; it builds and programs the application.
+
 **Step 1**:  Insert an active micro SIM that supports NB-IoT or LTE-M. and connect the antennas to the adapter board.
 
 ![Antenna SIM](resources/board_antenna_sim.png)

@@ -1,0 +1,11 @@
+{
+    "modustoolbox.toolsPath": "C:/Users/YOUR_USER/ModusToolbox/tools_3.7",
+    "cortex-debug.armToolchainPath": "C:/Users/YOUR_USER/Infineon/Tools/mtb-gcc-arm-eabi/14.2.1/gcc/bin",
+    "cortex-debug.openocdPath": "C:/Infineon/Tools/ModusToolboxProgtools-2.0/openocd/bin/openocd.exe",
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "clangd.arguments": [
+        "--background-index",
+        "--compile-commands-dir=${workspaceFolder}/build",
+        "--query-driver=C:/Users/YOUR_USER/Infineon/Tools/mtb-gcc-arm-eabi/14.2.1/gcc/bin/arm-none-eabi-*"
+    ]
+}

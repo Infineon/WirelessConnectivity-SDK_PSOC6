@@ -12,3 +12,7 @@ WE_Adrastea_cellular_connectivity/build/
 /mtb_shared
 project-creator.log
 /WE_Adrastea_cellular_connectivity/credentials.h
+/WE_Adrastea_cellular_connectivity/.vscode/settings.json
+/WE_Adrastea_cellular_connectivity/.cache/
+/WE_Adrastea_cellular_connectivity/library-manager.log
+/WE_Adrastea_cellular_connectivity/bsps/TARGET_APP_CY8CKIT-062S2-AI/config/GeneratedSource/
