@@ -64,7 +64,7 @@ extern "C"
 /**
  * @brief Driver version
  */
-#define WE_WIRELESS_CONNECTIVITY_SDK_VERSION {1, 0, 0}
+#define WE_WIRELESS_CONNECTIVITY_SDK_VERSION {1, 1, 0}
 
 #if defined(WE_DEBUG) || defined(WE_DEBUG_INIT)
 #define WE_DEBUG_PRINT(...) printf(__VA_ARGS__)

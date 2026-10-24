@@ -41,6 +41,7 @@ static AdrasteaI_ATPacketDomain_Network_Registration_Status_t status = {0};
  */
 void ATNetServiceExample()
 {
+    uint32_t elapsed = 0;
     WE_DEBUG_PRINT("*** Start of Adrastea-I ATNetService example ***\r\n");
 
     if (!AdrasteaI_Init(&AdrasteaI_uart, &AdrasteaI_pins, &AdrasteaI_ATNetService_EventCallback))
@@ -51,9 +52,23 @@ void ATNetServiceExample()
 
     bool ret = AdrasteaI_ATPacketDomain_SetNetworkRegistrationResultCode(AdrasteaI_ATPacketDomain_Network_Registration_Result_Code_Enable_with_Location_Info);
     AdrasteaI_ExamplesPrint("Set Network Registration Result Code", ret);
-    while (status.state != AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming)
+    
+    while (status.state != AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Home_Network &&
+           status.state != AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming &&
+           elapsed < NETWORK_REG_TIMEOUT_MS)
     {
-        WE_Delay(10);
+        WE_Delay(NETWORK_REG_POLL_INTERVAL_MS);
+        elapsed += NETWORK_REG_POLL_INTERVAL_MS;
+    }
+
+    if (elapsed >= NETWORK_REG_TIMEOUT_MS)
+    {
+        WE_DEBUG_PRINT("Timeout waiting for network registration.\r\n");
+        return;
+    }
+    else
+    {
+        WE_DEBUG_PRINT("Network registered: %d\r\n", status.state);
     }
 
 	//This command triggers a network scan and takes a while to list all the available networks. This is a blocking operation and ends only after all networks are detected.

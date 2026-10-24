@@ -65,6 +65,10 @@
 #define ADRASTEAI_SLEEPSET_EVENT "Sleep -"              /**< String sent by module after mcu changed sleep */
 #define ADRASTEAI_MAPCLICLOSE_EVENT "MAP CLI Closed"    /**< String sent by module when map cli is closed*/
 
+#define NETWORK_REG_TIMEOUT_MS 300000
+
+#define NETWORK_REG_POLL_INTERVAL_MS 1000
+
 #ifdef __cplusplus
 extern "C"
 {

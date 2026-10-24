@@ -184,21 +184,35 @@ This SDK implements the following set of examples to enable comprehensive evalua
 
 - SIM example: Implements the utilities need to interact with a SIM.
 
-- MQTT example: The MQTT example (enabled by default), demonstrates the MQTT client functionality of the Adrastea-I module. In this example, the MQTT client is configure to connect to the [A1 IoT platform](https://www.a1.digital/iot/).
+Two combined GNSS/MQTT examples are available in `AdrasteaI_Examples.c`. Enable only one example: `ATMQTTGNSSExample()` in `ATMQTTExamples.c` retains the Infineon CEP/hot-start demo with sensors, OLED and RFID and remains selected by default. `ATGNSSMQTTExample()` in `ATGNSSMQTTExamples.c` is the Wurth v1.1.0 cold-start demo without a CEP download. Both files use the shared MQTT configuration described below.
+
+The MQTT, HTTP, network service and SIM examples include the v1.1.0 network registration timeout (300 seconds) and accept both home-network and roaming registration. The retained Infineon `ATMQTTGNSSExample()` does not yet include this timeout.
+
+- MQTT example: The MQTT example demonstrates the MQTT client functionality of the Adrastea-I module. In this example, the MQTT client is configure to connect to the [A1 IoT platform](https://www.a1.digital/iot/).
 
 > [!Note] 
 > In order to run this example, you will need an A1 IoT platform account.
 
-Configure the following parameters in the file ["ATMQTTExamples.c"](\WE_Adrastea_cellular_connectivity\Adrastea\ATMQTTExamples.c) before running this example.
+Before building, copy the credentials template from the repository root:
+
+```powershell
+Copy-Item .\WE_Adrastea_cellular_connectivity\credentials.h.example .\WE_Adrastea_cellular_connectivity\credentials.h
+```
+
+Edit `WE_Adrastea_cellular_connectivity\credentials.h` to configure the following parameters for all MQTT examples:
 1. Address of your A1 cloud instance.
 2. Username for MQTT authorization this is a combination of the tenant ID and the username used for logging into to the platform.
 3. Password for MQTT authentication is the same password used for logging into to the platform
 
 ```C
-AdrasteaI_ATCommon_IP_Addr_t A1ServerAddress = "avl.iotstg.a1.digital";
-AdrasteaI_ATCommon_Auth_Username_t userName = "<Tenant ID>/<user_name>" ;
-AdrasteaI_ATCommon_Auth_Password_t password = "<password>";
+#define WE_MQTT_HOST "avl.iotstg.a1.digital"
+#define WE_MQTT_USERNAME "<Tenant ID>/<user_name>"
+#define WE_MQTT_PASSWORD "<password>"
 ```
+
+`credentials.h` is ignored by Git; only `credentials.h.example` is versioned. A missing local header causes a build error rather than silently using default credentials. Keep real credentials out of the template and do not force-add the local header. Changing the header requires rebuilding and flashing the firmware.
+
+This keeps credentials out of new source commits, not out of the firmware: these string literals are embedded in the binary and may also appear in build artifacts or AT-command debug output. Do not publish such artifacts or logs with real credentials. This example uses unencrypted MQTT on port 1883; use dedicated, least-privilege demo credentials. Credentials already committed remain in Git history and should be revoked or rotated.
 
 This example creates an MQTT connection to the A1 server on port 1883 and creates a device with the IMEI number as a unique identity on the platform(if the device does not exist). Finally, it sends the current RSSI and BER values periodically(Every 30 seconds by default).
 

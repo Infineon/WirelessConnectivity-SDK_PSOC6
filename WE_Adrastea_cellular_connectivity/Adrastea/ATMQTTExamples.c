@@ -37,6 +37,7 @@
 #include "AdrasteaI_Examples.h"
 #include "ATDevice.h"
 #include "ATNetService.h"
+#include "credentials.h"
 
 #include "ATGNSS.h"
 #include "ATPacketDomain.h"
@@ -54,11 +55,9 @@
 #define DEVICE_TYPE "ADRASTEA-I"
 #define TELEMETRY_SEND_INTERVAL_MS (30*1000)
 
-AdrasteaI_ATCommon_IP_Addr_t A1ServerAddress = "avl.iotstg.a1.digital";
-//AdrasteaI_ATCommon_Auth_Username_t userName = "<Tenant ID>/<user_name>" ;
-//AdrasteaI_ATCommon_Auth_Password_t password = "<password>";
-AdrasteaI_ATCommon_Auth_Username_t userName = "<Tenant ID>/<user_name>" ;
-AdrasteaI_ATCommon_Auth_Password_t password = "<password>";
+AdrasteaI_ATCommon_IP_Addr_t A1ServerAddress = WE_MQTT_HOST;
+AdrasteaI_ATCommon_Auth_Username_t userName = WE_MQTT_USERNAME;
+AdrasteaI_ATCommon_Auth_Password_t password = WE_MQTT_PASSWORD;
 AdrasteaI_ATMQTT_Topic_Name_t topicOperations = "s/ds";
 AdrasteaI_ATMQTT_Topic_Name_t topicError = "s/e";
 AdrasteaI_ATMQTT_Topic_Name_t pubTopic = "s/us";
@@ -67,7 +66,7 @@ AdrasteaI_ATMQTT_Topic_Name_t pubTopic = "s/us";
 char payload[128];
 
 void AdrasteaI_ATMQTT_EventCallback(char* eventText);
-int8_t AdrasteaI_getRSSIindBm(uint8_t rssi);
+static int8_t AdrasteaI_getRSSIindBm(uint8_t rssi);
 
 static AdrasteaI_ATPacketDomain_Network_Registration_Status_t status = {.state = 0};
 static AdrasteaI_ATMQTT_Connection_Result_t conResult = {.resultCode = -1};
@@ -102,13 +101,13 @@ void bytes_to_hex_string(const uint8_t *data, size_t len, char *out_str);
 uint64_t bytes_to_uint64(const uint8_t *data, size_t len);
 
 /**
- * @brief This example connects to the cellular network and accesses mosquitto.org via MQTT
+ * @brief This example connects to the cellular network and sends data to A1 cloud via MQTT
  *
  */
 void ATMQTTExample()
 {
     bool ret;
-
+    uint32_t elapsed = 0;
     WE_DEBUG_PRINT("*** Start of Adrastea-I ATMQTT example ***\r\n");
 
     if (!AdrasteaI_Init(&AdrasteaI_uart, &AdrasteaI_pins, &AdrasteaI_ATMQTT_EventCallback))
@@ -147,7 +146,9 @@ void ATMQTTExample()
 
     AdrasteaI_ExamplesPrint("Set Network Registration Result Code", ret);
 
-    while (!((status.state == AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming)||(status.state == AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Home_Network)))
+    while ((status.state != AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Home_Network) &&
+           (status.state != AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming) &&
+           (elapsed < NETWORK_REG_TIMEOUT_MS))
     {
         switch(status.state){
 			case AdrasteaI_ATPacketDomain_Network_Registration_State_Invalid: WE_DEBUG_PRINT("Networkstatus: Network_Registration_State_Invalid\r\n");break;
@@ -167,12 +168,22 @@ void ATMQTTExample()
 		}
 		
         
-        WE_Delay(500);   
+        WE_Delay(NETWORK_REG_POLL_INTERVAL_MS);
+        elapsed += NETWORK_REG_POLL_INTERVAL_MS;
     }
-    WE_DEBUG_PRINT("Networkstatus: Registered\r\n");
+
+    if (elapsed >= NETWORK_REG_TIMEOUT_MS)
+    {
+        WE_DEBUG_PRINT("Timeout waiting for network registration.\r\n");
+        return;
+    }
+    else
+    {
+        WE_DEBUG_PRINT("Network registered: %d\r\n", status.state);
+    }
     
     /*Read the IMEI number, this will be used as the client ID*/
-    AdrasteaI_ATDevice_IMEI_t imei;
+    AdrasteaI_ATDevice_IMEI_t imei = "";
     ret = AdrasteaI_ATDevice_RequestIMEI(&imei);
     AdrasteaI_ExamplesPrint("Request IMEI", ret);
     WE_DEBUG_PRINT("IMEI: %s\r\n", imei);
@@ -181,7 +192,7 @@ void ATMQTTExample()
     ret = AdrasteaI_ATMQTT_SetMQTTUnsolicitedNotificationEvents(AdrasteaI_ATMQTT_Event_All, 1);
     AdrasteaI_ExamplesPrint("MQTT Unsolicited Notification Events", ret);
 	
-	AdrasteaI_ATMQTT_Client_ID_t clientID="";
+	AdrasteaI_ATMQTT_Client_ID_t clientID = "";
 	
 	strncpy(clientID, imei, 15);
 	/*Configure MQTT client*/

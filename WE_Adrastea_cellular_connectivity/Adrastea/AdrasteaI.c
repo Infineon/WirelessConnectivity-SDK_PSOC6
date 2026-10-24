@@ -698,7 +698,7 @@ static void AdrasteaI_HandleRxByte(uint8_t* dataP, size_t size)
 static void AdrasteaI_HandleRxLine(char* rxPacket, uint16_t rxLength)
 {
 #ifdef WE_DEBUG
-    WE_DEBUG_PRINT("< %s\r\n", rxPacket);
+    //WE_DEBUG_PRINT("< %s\r\n", rxPacket);
 #endif
 
     if (AdrasteaI_requestPending)

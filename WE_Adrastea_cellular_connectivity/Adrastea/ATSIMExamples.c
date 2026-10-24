@@ -40,6 +40,7 @@ static AdrasteaI_ATSIM_PIN_t pin = "2912";
 
 void ATSIMExample()
 {
+	uint32_t elapsed = 0;
     WE_DEBUG_PRINT("*** Start of Adrastea-I ATSIM example ***\r\n");
 
     if (!AdrasteaI_Init(&AdrasteaI_uart, &AdrasteaI_pins, &AdrasteaI_ATSIM_EventCallback))
@@ -50,9 +51,23 @@ void ATSIMExample()
 
     bool ret = AdrasteaI_ATPacketDomain_SetNetworkRegistrationResultCode(AdrasteaI_ATPacketDomain_Network_Registration_Result_Code_Enable_with_Location_Info);
     AdrasteaI_ExamplesPrint("Set Network Registration Result Code", ret);
-    while (!((status.state == AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Home_Network) || (status.state == AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming)))
+
+    while (status.state != AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Home_Network &&
+           status.state != AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming &&
+           elapsed < NETWORK_REG_TIMEOUT_MS)
     {
-        WE_Delay(10);
+        WE_Delay(NETWORK_REG_POLL_INTERVAL_MS);
+        elapsed += NETWORK_REG_POLL_INTERVAL_MS;
+    }
+
+    if (elapsed >= NETWORK_REG_TIMEOUT_MS)
+    {
+        WE_DEBUG_PRINT("Timeout waiting for network registration.\r\n");
+        return;
+    }
+    else
+    {
+        WE_DEBUG_PRINT("Network registered: %d\r\n", status.state);
     }
 
     AdrasteaI_ATSIM_IMSI_t imsi;

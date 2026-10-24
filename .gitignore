@@ -11,3 +11,4 @@ WE_Adrastea_cellular_connectivity/build/
 *.ninja_lock
 /mtb_shared
 project-creator.log
+/WE_Adrastea_cellular_connectivity/credentials.h

@@ -32,8 +32,15 @@
 #include "AdrasteaI.h"
 #include "AdrasteaI_Examples.h"
 
+#define SAT_QUERY_REG_TIMEOUT_MS (30*1000)
+#define SAT_QUERY_POLL_INTERVAL_MS (2000)
+
+
+#define FIX_QUERY_TIMEOUT_MS (50*1000)
+#define FIX_QUERY_POLL_INTERVAL_MS (5000)
 
 void AdrasteaI_ATGNSS_EventCallback(char* eventText);
+static bool AdrasteaI_getFix(AdrasteaI_ATGNSS_Fix_t *fix);
 
 static AdrasteaI_ATPacketDomain_Network_Registration_Status_t status = {.state = 0};
 
@@ -52,60 +59,72 @@ void ATGNSSExample()
         WE_DEBUG_PRINT("Initialization error\r\n");
         return;
     }
-
-    bool ret = AdrasteaI_ATPacketDomain_SetNetworkRegistrationResultCode(AdrasteaI_ATPacketDomain_Network_Registration_Result_Code_Enable_with_Location_Info);
-    AdrasteaI_ExamplesPrint("Set Network Registration Result Code", ret);
-
-    while (status.state != AdrasteaI_ATPacketDomain_Network_Registration_State_Registered_Roaming)
-    {
-        WE_Delay(10);
-    }
-
-    ret = AdrasteaI_ATGNSS_DownloadCEPFile(AdrasteaI_ATGNSS_CEP_Number_of_Days_1Day);
-    AdrasteaI_ExamplesPrint("Download CEP File", ret);
-
-    AdrasteaI_ATGNSS_CEP_Status_t cepStatus;
-    ret = AdrasteaI_ATGNSS_QueryCEPFileStatus(&cepStatus);
-    AdrasteaI_ExamplesPrint("Query CEP Status", ret);
-    if (ret)
-    {
-        WE_DEBUG_PRINT("Validity: %d, Remaining Days: %d, Hours: %d, Minutes:%d\r\n", cepStatus.validity, cepStatus.remDays, cepStatus.remHours, cepStatus.remMinutes);
-    }
-
-    ret = AdrasteaI_ATDevice_SetPhoneFunctionality(AdrasteaI_ATDevice_Phone_Functionality_Min, AdrasteaI_ATDevice_Phone_Functionality_Reset_Do_Not_Reset);
+    bool ret = AdrasteaI_ATDevice_SetPhoneFunctionality(AdrasteaI_ATDevice_Phone_Functionality_Min, AdrasteaI_ATDevice_Phone_Functionality_Reset_Do_Not_Reset);
     AdrasteaI_ExamplesPrint("Set Phone Functionality", ret);
 
-    ret = AdrasteaI_ATGNSS_StartGNSS(AdrasteaI_ATGNSS_Start_Mode_Cold);
+    AdrasteaI_ATGNSS_Fix_t fix;
+    while (1)
+    {
+		AdrasteaI_getFix(&fix);
+        WE_Delay(60000);
+    }
+}
+
+static bool AdrasteaI_getFix(AdrasteaI_ATGNSS_Fix_t *fix)
+{
+    uint32_t elapsed = 0;
+    satelliteQueryCount = 0;
+    satelliteQueryEventCount = 0;
+    
+    bool  ret = AdrasteaI_ATGNSS_StartGNSS(AdrasteaI_ATGNSS_Start_Mode_Cold);
     AdrasteaI_ExamplesPrint("Start GNSS", ret);
 
     AdrasteaI_ATGNSS_Satellite_Systems_t satSystems = {.systems = {.GPS = AdrasteaI_ATGNSS_Runtime_Mode_State_Set, .GLONASS = AdrasteaI_ATGNSS_Runtime_Mode_State_Set}};
     ret = AdrasteaI_ATGNSS_SetSatelliteSystems(satSystems);
     AdrasteaI_ExamplesPrint("Set Satellite Systems", ret);
-
-    AdrasteaI_ATGNSS_Fix_t fix;
-
-    while (1)
+    
+    WE_DEBUG_PRINT("Waiting for at least 4 satellites to be in the range\r\n");
+   	while((satelliteQueryCount < 4) && (elapsed < SAT_QUERY_REG_TIMEOUT_MS))
+	{
+		AdrasteaI_ATGNSS_QueryGNSSSatellites(&satelliteQueryCount);
+		WE_Delay(SAT_QUERY_POLL_INTERVAL_MS);
+        elapsed += SAT_QUERY_POLL_INTERVAL_MS;
+	}
+	if(elapsed >= SAT_QUERY_REG_TIMEOUT_MS)
+	{
+		WE_DEBUG_PRINT("Satellite query timed out\r\n");		
+		return false;
+	}
+    while (satelliteQueryCount != satelliteQueryEventCount)
     {
-        WE_Delay(30000);
-        satelliteQueryCount = 0;
-        satelliteQueryEventCount = 0;
-        ret = AdrasteaI_ATGNSS_QueryGNSSSatellites(&satelliteQueryCount);
-        AdrasteaI_ExamplesPrint("Query GNSS Satellites", ret);
-        WE_DEBUG_PRINT("Satellites Count: %d\r\n", satelliteQueryCount);
-
-        while (satelliteQueryCount != satelliteQueryEventCount)
-        {
-            WE_Delay(1000);
-        }
-
-        ret = AdrasteaI_ATGNSS_QueryGNSSFix(AdrasteaI_ATGNSS_Fix_Relavancy_Current, &fix);
-        AdrasteaI_ExamplesPrint("Query GNSS Fix", ret);
-
-        if (ret && fix.fixType != AdrasteaI_ATGNSS_Fix_Type_No_Fix)
-        {
-            WE_DEBUG_PRINT("Fix Latitude: %f, Longitude: %f, Altitude: %f\r\n", fix.latitude, fix.longitude, fix.altitude);
-        }
+        WE_Delay(1000);
+        WE_DEBUG_PRINT("Waiting for information from all visible satellites \r\n");
     }
+
+	elapsed = 0;
+	fix->fixType =  AdrasteaI_ATGNSS_Fix_Type_Invalid;
+  	
+	while ((elapsed < FIX_QUERY_TIMEOUT_MS) && (fix->fixType <= 0)) 
+    {
+		ret = AdrasteaI_ATGNSS_QueryGNSSFix(AdrasteaI_ATGNSS_Fix_Relavancy_Current, fix);
+		WE_Delay(FIX_QUERY_POLL_INTERVAL_MS);
+		elapsed += FIX_QUERY_POLL_INTERVAL_MS;
+	}
+    
+    if(elapsed > FIX_QUERY_TIMEOUT_MS)
+	{
+		WE_DEBUG_PRINT("Fix timed out\r\n" );		
+		return false;
+	}
+
+    WE_DEBUG_PRINT("Date: %u.%u.%d\r\n", fix->date.Day, fix->date.Month, fix->date.Year);
+	WE_DEBUG_PRINT("Time: %u:%u:%u\r\n", fix->time.Hours, fix->time.Minutes, fix->time.Seconds);
+	WE_DEBUG_PRINT("Fix Latitude: %ld.%06ld, Longitude: %ld.%06ld, Altitude: %ld.%06ld\r\n",
+	       (long)fix->latitude, (long)((fix->latitude - (long)fix->latitude) * 1000000),
+	       (long)fix->longitude, (long)((fix->longitude - (long)fix->longitude) * 1000000),
+	       (long)fix->altitude, (long)((fix->altitude - (long)fix->altitude) * 1000000));
+	return true;
+
 }
 
 void AdrasteaI_ATGNSS_EventCallback(char* eventText)

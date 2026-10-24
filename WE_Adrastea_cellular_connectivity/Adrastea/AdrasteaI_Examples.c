@@ -35,6 +35,7 @@
 #include "ATGNSSExamples.h"
 #include "ATPowerExamples.h"
 #include "AdrasteaI_Examples.h"
+#include "ATGNSSMQTTExamples.h"
 
 #define ADRASTEA_PSOC_RESET_PIN P9_5
 #define ADRASTEA_PSOC_WAKE_UP_PIN P9_6
@@ -76,6 +77,7 @@ void AdrasteaI_Examples()
     //ATHTTPExample();
     //ATGNSSExample();
     //ATSIMExample();
+    //ATGNSSMQTTExample();
     return;
 }
 
